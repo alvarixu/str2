@@ -1,0 +1,24 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# requirements.txt — Sonitel Industrial · Monitor Acústico
+# ──────────────────────────────────────────────────────────────────────────────
+# Instala con:
+#   pip install -r requirements.txt
+#
+# Notas:
+#  - sounddevice requiere el runtime de PortAudio en Windows.
+#    Si da error, instala primero: pip install pipwin && pipwin install pyaudio
+#    o descarga el binario desde https://www.lfd.uci.edu/~gohlke/pythonlibs/
+#  - Para usar el modelo Keras añade: tensorflow>=2.13
+#  - Para usar el modelo PyTorch añade: torch>=2.0 torchvision
+# ──────────────────────────────────────────────────────────────────────────────
+
+streamlit>=1.35.0
+numpy>=1.24.0
+librosa>=0.10.1
+sounddevice>=0.4.6
+matplotlib>=3.8.0
+
+# ── Opcionales (descomenta según el framework del modelo) ──────────────────
+# tensorflow>=2.13.0        # Para modelos .keras
+# torch>=2.0.0              # Para modelos .pt (PyTorch)
+# torchvision>=0.15.0       # Si el modelo usa capas de visión de PyTorch

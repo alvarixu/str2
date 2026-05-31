@@ -159,6 +159,7 @@ class AcousticBackbone(nn.Module):
         x_hat = self.decoder(z)
         return x_hat
 
+@st.cache_resource
 def cargar_modelo(ruta_modelo: str):
     """
     Carga el modelo de ML pre-entrenado desde disco.
@@ -179,10 +180,9 @@ def cargar_modelo(ruta_modelo: str):
             modelo.load_state_dict(checkpoint)
             
         modelo.eval()
-        st.toast(f"✅ Modelo cargado ({embedding_dim} dims) desde: {ruta_modelo}", icon="🧠")
         return modelo
     except Exception as e:
-        st.error(f"❌ Error al cargar el modelo: {e}")
+        print(f"Error al cargar el modelo: {e}")
         return None
 
 def inferir_anomalia(modelo, mel_espectrograma: np.ndarray) -> float:
@@ -271,8 +271,8 @@ def graficar_espectrograma(mel: np.ndarray, sr: int = SAMPLE_RATE) -> plt.Figure
     -------
     matplotlib.figure.Figure
     """
-    fig, ax = plt.subplots(figsize=(8, 3), facecolor="#0d1117")
-    ax.set_facecolor("#0d1117")
+    fig, ax = plt.subplots(figsize=(8, 3), facecolor="white")
+    ax.set_facecolor("white")
 
     # Convierte de vuelta a dB para visualización
     mel_db = mel * 80 - 80  # desnormaliza aproximada para visualización
@@ -286,12 +286,12 @@ def graficar_espectrograma(mel: np.ndarray, sr: int = SAMPLE_RATE) -> plt.Figure
         cmap="magma",
     )
     fig.colorbar(img, ax=ax, format="%+2.0f dB", label="Intensidad (dB)")
-    ax.set_title("Espectrograma de Mel – Último Chunk", color="white", pad=8)
-    ax.tick_params(colors="white")
-    ax.xaxis.label.set_color("white")
-    ax.yaxis.label.set_color("white")
+    ax.set_title("Espectrograma de Mel – Último Chunk", color="black", pad=8)
+    ax.tick_params(colors="black")
+    ax.xaxis.label.set_color("black")
+    ax.yaxis.label.set_color("black")
     for spine in ax.spines.values():
-        spine.set_edgecolor("#30363d")
+        spine.set_edgecolor("#cccccc")
     plt.tight_layout()
     return fig
 
@@ -420,15 +420,20 @@ def obtener_micros() -> dict[str, int]:
 
     Retorna
     -------
-    dict { "nombre (índice)": índice_de_dispositivo }
+    dict { "nombre (HostAPI) [índice]": índice_de_dispositivo }
     """
-    dispositivos = sd.query_devices()
-    micros = {}
-    for idx, dev in enumerate(dispositivos):
-        if dev["max_input_channels"] > 0:
-            nombre = f"{dev['name']} (#{idx})"
-            micros[nombre] = idx
-    return micros
+    try:
+        dispositivos = sd.query_devices()
+        hostapis = sd.query_hostapis()
+        micros = {}
+        for idx, dev in enumerate(dispositivos):
+            if dev["max_input_channels"] > 0:
+                host_api_name = hostapis[dev["hostapi"]]["name"]
+                nombre = f"{dev['name']} ({host_api_name}) [#{idx}]"
+                micros[nombre] = idx
+        return micros
+    except Exception:
+        return {"Micrófono por defecto": None}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -523,7 +528,12 @@ def renderizar_sidebar() -> tuple[float, str | None]:
             ),
         )
         if st.button("📥 Cargar Modelo", use_container_width=True):
-            st.session_state["modelo"] = cargar_modelo(ruta_modelo)
+            modelo = cargar_modelo(ruta_modelo)
+            if modelo is not None:
+                st.session_state["modelo"] = modelo
+                st.toast(f"✅ Modelo cargado desde: {ruta_modelo}", icon="🧠")
+            else:
+                st.error("❌ Error al cargar el modelo. Revisa la ruta y la consola.")
 
         estado_modelo = "✅ Cargado" if st.session_state["modelo"] else "⚪ Mock (simulación)"
         st.info(f"Estado del modelo: {estado_modelo}")
@@ -659,9 +669,8 @@ def renderizar_historico() -> None:
         return
 
     st.subheader("📉 Histórico de Anomalía (sesión actual)")
-    fig, ax = plt.subplots(figsize=(8, 2.5), facecolor="#0d1117")
-    ax.set_facecolor="#161b22"
-    ax.set_facecolor("#161b22")
+    fig, ax = plt.subplots(figsize=(8, 2.5), facecolor="white")
+    ax.set_facecolor("white")
     ax.plot(historico, color="#58a6ff", linewidth=1.5, label="% Anomalía")
     ax.axhline(
         y=st.session_state.get("umbral_guardado", 85),
@@ -672,12 +681,12 @@ def renderizar_historico() -> None:
     )
     ax.fill_between(range(len(historico)), historico, alpha=0.15, color="#58a6ff")
     ax.set_ylim(0, 105)
-    ax.set_xlabel("Chunk #", color="white")
-    ax.set_ylabel("Anomalía (%)", color="white")
-    ax.tick_params(colors="white")
-    ax.legend(facecolor="#161b22", labelcolor="white")
+    ax.set_xlabel("Chunk #", color="black")
+    ax.set_ylabel("Anomalía (%)", color="black")
+    ax.tick_params(colors="black")
+    ax.legend(facecolor="white", labelcolor="black")
     for spine in ax.spines.values():
-        spine.set_edgecolor("#30363d")
+        spine.set_edgecolor("#cccccc")
     plt.tight_layout()
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
@@ -758,146 +767,122 @@ def main() -> None:
     # CSS personalizado para mejorar la estética oscura con Glassmorphism
     st.markdown(
         """
-        <style>
+                <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
             
             /* Configuración general */
             html, body, [class*="css"] {
                 font-family: 'Inter', sans-serif;
-                background-color: #0d1117;
-                color: #e6edf3;
+                background-color: #ffffff !important;
+                color: #111111 !important;
             }
             
             h1, h2, h3, h4, h5, h6 {
                 font-family: 'Inter', sans-serif;
                 font-weight: 600;
+                color: #111111 !important;
                 letter-spacing: -0.02em;
+            }
+            
+            p, span, label, div {
+                color: #111111;
             }
             
             /* Tarjetas de Métricas Premium */
             [data-testid="stMetric"] {
-                background: rgba(22, 27, 34, 0.6);
-                border: 1px solid rgba(48, 54, 61, 0.8);
-                border-radius: 12px;
-                padding: 16px 20px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                backdrop-filter: blur(10px);
-                transition: all 0.3s ease;
+                background: #ffffff !important;
+                border: 1px solid #e1e4e8 !important;
+                border-radius: 12px !important;
+                padding: 16px 20px !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
             }
-            [data-testid="stMetric"]:hover {
-                border-color: #1f6feb;
-                box-shadow: 0 4px 20px rgba(31, 111, 235, 0.15);
-                transform: translateY(-2px);
+            [data-testid="stMetric"] label {
+                color: #555555 !important;
+            }
+            [data-testid="stMetric"] div {
+                color: #111111 !important;
             }
             
-            /* Contenedor de Tarjetas Generales (Glassmorphism) */
+            /* Contenedor de Tarjetas Generales */
             .premium-card {
-                background: rgba(22, 27, 34, 0.6);
-                border: 1px solid rgba(48, 54, 61, 0.8);
-                border-radius: 12px;
-                padding: 20px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                backdrop-filter: blur(10px);
-                margin-bottom: 20px;
+                background: #ffffff !important;
+                border: 1px solid #e1e4e8 !important;
+                border-radius: 12px !important;
+                padding: 20px !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+                margin-bottom: 20px !important;
             }
             
             /* Botones Estilo Premium */
             .stButton > button {
-                background: #21262d !important;
-                color: #c9d1d9 !important;
-                border: 1px solid #30363d !important;
+                background: #f6f8fa !important;
+                color: #24292e !important;
+                border: 1px solid #d1d5da !important;
                 border-radius: 8px !important;
-                padding: 8px 16px !important;
-                font-weight: 500 !important;
-                transition: all 0.2s ease !important;
             }
             .stButton > button:hover {
-                border-color: #8b949e !important;
-                background: #30363d !important;
-                color: #f0f6fc !important;
+                border-color: #1f6feb !important;
+                background: #f3f4f6 !important;
             }
             
             /* Botón Primario */
             .stButton > button[kind="primary"] {
-                background: linear-gradient(135deg, #1f6feb, #388bfd) !important;
+                background: #1f6feb !important;
                 color: #ffffff !important;
                 border: none !important;
-                box-shadow: 0 4px 12px rgba(31, 111, 235, 0.25) !important;
-            }
-            .stButton > button[kind="primary"]:hover {
-                background: linear-gradient(135deg, #388bfd, #58a6ff) !important;
-                box-shadow: 0 4px 20px rgba(56, 139, 253, 0.4) !important;
             }
             
             /* Barra lateral */
             section[data-testid="stSidebar"] {
-                background-color: #161b22;
-                border-right: 1px solid #30363d;
+                background-color: #f8f9fa !important;
+                border-right: 1px solid #e1e4e8 !important;
+            }
+            section[data-testid="stSidebar"] * {
+                color: #111111 !important;
             }
             
-            /* Badges de Veredicto Normal y Anomalía */
+            /* Badges */
             .badge-normal {
                 display: inline-block;
-                background: rgba(46, 204, 113, 0.15);
-                border: 1px solid #2ecc71;
-                color: #2ecc71;
+                background: #e6ffed;
+                border: 1px solid #2ea043;
+                color: #2ea043 !important;
                 font-family: 'JetBrains Mono', monospace;
-                font-size: 14px;
-                font-weight: 600;
                 padding: 10px 24px;
                 border-radius: 8px;
-                letter-spacing: 0.05em;
-                margin-bottom: 15px;
             }
             
             .badge-anomaly {
                 display: inline-block;
-                background: rgba(231, 76, 60, 0.15);
-                border: 1px solid #e74c3c;
-                color: #e74c3c;
+                background: #ffebe9;
+                border: 1px solid #d73a49;
+                color: #d73a49 !important;
                 font-family: 'JetBrains Mono', monospace;
-                font-size: 14px;
-                font-weight: 600;
                 padding: 10px 24px;
                 border-radius: 8px;
-                letter-spacing: 0.05em;
-                margin-bottom: 15px;
-                animation: pulso-rojo 1.5s ease-in-out infinite alternate;
             }
             
-            /* Alerta de anomalía en monitor */
             .alerta-anomalia {
-                background: linear-gradient(135deg, rgba(248, 81, 73, 0.15), rgba(248, 81, 73, 0.05));
-                border: 1px solid #f85149;
+                background: #ffebe9;
+                border: 1px solid #d73a49;
                 border-radius: 12px;
                 padding: 20px;
                 margin: 15px 0;
-                animation: pulso 1.5s ease-in-out infinite alternate;
             }
             
-            @keyframes pulso {
-                from { box-shadow: 0 0 8px rgba(248, 81, 73, 0.3); }
-                to   { box-shadow: 0 0 20px rgba(248, 81, 73, 0.6); }
+            /* Estilizar selectbox */
+            div[data-baseweb="select"] > div {
+                background-color: #ffffff !important;
+                border: 1px solid #d1d5da !important;
             }
-            
-            @keyframes pulso-rojo {
-                from { box-shadow: 0 0 4px rgba(231, 76, 60, 0.2); }
-                to   { box-shadow: 0 0 12px rgba(231, 76, 60, 0.5); }
-            }
-            
-            /* Estilizar selectbox de Streamlit */
-            div[data-baseweb="select"] {
-                border-radius: 8px;
-                background-color: #161b22;
-                border: 1px solid #30363d;
+            div[data-baseweb="select"] * {
+                color: #111111 !important;
             }
             
             /* Estilizar file uploader */
             div[data-testid="stFileUploader"] {
-                border: 2px dashed rgba(48, 54, 61, 0.8);
-                border-radius: 12px;
-                background-color: rgba(22, 27, 34, 0.4);
-                padding: 15px;
+                border: 2px dashed #d1d5da !important;
+                background-color: #f8f9fa !important;
             }
         </style>
         """,
@@ -1129,8 +1114,8 @@ def main() -> None:
                         st.markdown('<div class="premium-card">', unsafe_allow_html=True)
                         st.markdown("#### Evolución de Anomalías por Ventana")
                         
-                        fig, ax = plt.subplots(figsize=(8, 3.8), facecolor="#0d1117")
-                        ax.set_facecolor("#161b22")
+                        fig, ax = plt.subplots(figsize=(8, 3.8), facecolor="white")
+                        ax.set_facecolor("white")
                         
                         x_indices = range(len(ventanas_anomalias))
                         colores_barras = ["#f85149" if v > umbral else "#58a6ff" for v in ventanas_anomalias]
@@ -1140,12 +1125,12 @@ def main() -> None:
                         ax.axhline(mean_anom, color="#ffc107", linestyle=":", linewidth=2, label=f"Media ({mean_anom:.1f}%)")
                         
                         ax.set_ylim(0, 105)
-                        ax.set_xlabel("Ventana (Tiempo)", color="white")
-                        ax.set_ylabel("Anomalía (%)", color="white")
-                        ax.tick_params(colors="white")
-                        ax.legend(facecolor="#161b22", labelcolor="white")
+                        ax.set_xlabel("Ventana (Tiempo)", color="black")
+                        ax.set_ylabel("Anomalía (%)", color="black")
+                        ax.tick_params(colors="black")
+                        ax.legend(facecolor="white", labelcolor="black")
                         for spine in ax.spines.values():
-                            spine.set_edgecolor("#30363d")
+                            spine.set_edgecolor("#cccccc")
                         plt.tight_layout()
                         st.pyplot(fig, use_container_width=True)
                         plt.close(fig)
@@ -1169,10 +1154,11 @@ def main() -> None:
         captura = st.session_state["captura"]
         if captura and captura.error_msg:
             st.error(f"❌ Error en la captura de audio: {captura.error_msg}")
+            st.warning("Prueba a reiniciar el servidor de Streamlit (Ctrl+C en la consola y vuelve a lanzarlo).")
             captura.detener()
             st.session_state["monitor_activo"] = False
             st.session_state["captura"] = None
-            st.rerun()
+            # No hacemos st.rerun() aquí para que el mensaje de error persista en pantalla
         else:
             procesar_cola(umbral)
             time.sleep(INTERVALO_REFRESCO)
